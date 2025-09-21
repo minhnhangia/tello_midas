@@ -62,6 +62,9 @@ class MultiMiDaSNode(Node):
             )
 
     def image_callback(self, msg: Image, drone_id: str):
+        if self.pubs_colormap[drone_id].get_subscription_count() == 0 and self.pubs_depth[drone_id].get_subscription_count() == 0:
+            return
+
         try:
             # Convert ROS Image to CV image (BGR)
             frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')

@@ -50,6 +50,9 @@ class MiDaSNode(Node):
             self.transform = midas_transforms.small_transform
 
     def image_callback(self, msg: Image):
+        if self.pub_colormap.get_subscription_count() == 0 and self.pub_depth.get_subscription_count() == 0:
+            return
+        
         try:
             # Convert ROS Image to CV image (BGR)
             frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
