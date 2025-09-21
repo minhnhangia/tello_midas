@@ -11,13 +11,13 @@ import time
 
 class MiDaSNode(Node):
     def __init__(self):
-        super().__init__('midas_depth_node')
+        super().__init__('midas_node')
 
-        # params (can be overridden with ros2 param set / --ros-args -p ...)
+        # Parameters
         self.declare_parameter("model_type", "MiDaS_small")  # default to smaller model for CPU
-        self.declare_parameter("input_topic", "/drone1/image_raw")
-        self.declare_parameter("output_raw_topic", "/drone1/depth/raw")
-        self.declare_parameter("output_colormap_topic", "/drone1/depth/colormap")
+        self.declare_parameter("input_topic", "/tello1/image_raw")
+        self.declare_parameter("output_raw_topic", "/tello1/depth/raw")
+        self.declare_parameter("output_colormap_topic", "/tello1/depth/colormap")
 
         model_type = self.get_parameter("model_type").value
         input_topic = self.get_parameter("input_topic").value
