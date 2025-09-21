@@ -2,6 +2,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
+from rclpy.qos import qos_profile_sensor_data
 from cv_bridge import CvBridge
 
 import torch
@@ -51,10 +52,10 @@ class MultiMiDaSNode(Node):
             self.subs[drone] = self.create_subscription(
                 Image, img_topic,
                 lambda msg, d=drone: self.image_callback(msg, d),
-                1
+                qos_profile_sensor_data
             )
-            self.pubs_depth[drone] = self.create_publisher(Image, depth_topic, 1)
-            self.pubs_colormap[drone] = self.create_publisher(Image, cmap_topic, 1)
+            self.pubs_depth[drone] = self.create_publisher(Image, depth_topic, qos_profile_sensor_data)
+            self.pubs_colormap[drone] = self.create_publisher(Image, cmap_topic, qos_profile_sensor_data)
 
             self.get_logger().info(
                 f"Subscribed {img_topic}, publishing {depth_topic}, {cmap_topic}"
