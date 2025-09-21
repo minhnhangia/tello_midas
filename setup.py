@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "tello_midas_node = tello_midas.midas_node:main",
+            "midas_node = tello_midas.midas_node:main",
+            "multi_midas_node = tello_midas.multi_midas_node:main",
         ],
     },
 )
