@@ -2,7 +2,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy, QoSHistoryPolicy
 from cv_bridge import CvBridge
 
 import torch
@@ -29,10 +29,17 @@ class MiDaSNode(Node):
 
         self.bridge = CvBridge()
 
+        qos_profile = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            durability=QoSDurabilityPolicy.VOLATILE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+
         # ROS interfaces
-        self.sub = self.create_subscription(Image, input_topic, self.image_callback, qos_profile_sensor_data)
-        self.pub_depth = self.create_publisher(Image, output_raw_topic, qos_profile_sensor_data)
-        self.pub_colormap = self.create_publisher(Image, output_colormap_topic, qos_profile_sensor_data)
+        self.sub = self.create_subscription(Image, input_topic, self.image_callback, qos_profile)
+        self.pub_depth = self.create_publisher(Image, output_raw_topic, qos_profile)
+        self.pub_colormap = self.create_publisher(Image, output_colormap_topic, qos_profile)
 
         # load model once
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
