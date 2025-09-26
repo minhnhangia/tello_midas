@@ -36,6 +36,8 @@ class MiDaSAnalysis(Node):
         self.pub_colormap = self.create_publisher(Image, output_colormap_topic, qos_profile)
         self.pub_annotated_colormap = self.create_publisher(Image, output_annotated_colormap_topic, qos_profile)
 
+        self.grid_lines = None
+
     def depth_image_callback(self, msg: Image):
         # Skip processing if no subscribers to save computation
         if (self.pub_colormap.get_subscription_count() == 0 and 
@@ -50,20 +52,24 @@ class MiDaSAnalysis(Node):
             self.__process_colormaps(depth_map, msg.header)
 
         except Exception as e:
-            self.get_logger().error(f"Error in image_callback: {e}")
+            self.get_logger().error(f"Error in depth_image_callback: {e}")
 
     def __process_colormaps(self, depth_map, header):             
         depth_norm = cv2.normalize(depth_map, None, 0, 1, norm_type=cv2.NORM_MINMAX)
         depth_color = cv2.applyColorMap((depth_norm * 255).astype(np.uint8), cv2.COLORMAP_JET)
         height, width = depth_color.shape[:2]
 
+        if self.grid_lines is None:
+            self.grid_lines = self.__compute_grid_lines(height, width)
+
+        # Analyze and publish colormap data
         self.__publish_colormap_data(depth_color, header, height, width)
 
         # Publish clean colormap
         self.__publish_clean_colormap(depth_color, header)
 
-        # Create copy for annotation to avoid modifying original
-        self.__publish_annotated_colormap(depth_color.copy(), header, height, width)
+        # Publish annotated colormap
+        self.__publish_annotated_colormap(depth_color, header)
 
     def __publish_colormap_data(self, depth_colormap, header, h, w):            
         # Define the 3x3 grid regions
@@ -135,31 +141,38 @@ class MiDaSAnalysis(Node):
         colormap_msg.header = header
         self.pub_colormap.publish(colormap_msg)
 
-    def __publish_annotated_colormap(self, depth_colormap, header, h, w): 
+    def __publish_annotated_colormap(self, depth_color, header): 
         if self.pub_annotated_colormap.get_subscription_count() == 0:
             return
-                           
-        # Draw the outer grid lines (green)
-        cv2.line(depth_colormap, (w//3, 0), (w//3, h), (0, 255, 0), 2)
-        cv2.line(depth_colormap, (2*w//3, 0), (2*w//3, h), (0, 255, 0), 2)
-        cv2.line(depth_colormap, (0, h//3), (w, h//3), (0, 255, 0), 2)
-        cv2.line(depth_colormap, (0, 2*h//3), (w, 2*h//3), (0, 255, 0), 2)
 
-        # Further split the middle_center region into 3 columns for detailed analysis
-        mc_row_start = h//3
-        mc_row_end = 2*h//3
-        mc_col_start = w//3
-        mc_col_end = 2*w//3
-        mc_width = mc_col_end - mc_col_start  # roughly w//3
-        sub_width = mc_width // 3             # width of each subdivided region
-
-        # Draw extra vertical lines (blue) within the middle_center region to delineate subdivisions
-        cv2.line(depth_colormap, (mc_col_start + sub_width, mc_row_start), (mc_col_start + sub_width, mc_row_end), (255, 0, 0), 2)
-        cv2.line(depth_colormap, (mc_col_start + 2*sub_width, mc_row_start), (mc_col_start + 2*sub_width, mc_row_end), (255, 0, 0), 2)
-
-        annotated_msg = self.bridge.cv2_to_imgmsg(depth_colormap, encoding="bgr8")
+        annotated = depth_color.copy()
+        for start, end, color, thickness in self.grid_lines:
+            cv2.line(annotated, start, end, color, thickness)
+        annotated_msg = self.bridge.cv2_to_imgmsg(annotated, encoding="bgr8")
         annotated_msg.header = header
         self.pub_annotated_colormap.publish(annotated_msg)
+
+    def __compute_grid_lines(self, height, width):
+        """Precompute all grid lines for the annotated colormap."""
+        lines = []
+        # Outer green 3x3 grid
+        lines.append(((width//3, 0), (width//3, height), (0, 255, 0), 2))
+        lines.append(((2*width//3, 0), (2*width//3, height), (0, 255, 0), 2))
+        lines.append(((0, height//3), (width, height//3), (0, 255, 0), 2))
+        lines.append(((0, 2*height//3), (width, 2*height//3), (0, 255, 0), 2))
+
+        # Middle-center blue subdivisions
+        mc_row_start = height//3
+        mc_row_end = 2*height//3
+        mc_col_start = width//3
+        mc_col_end = 2*width//3
+        mc_width = mc_col_end - mc_col_start
+        sub_width = mc_width // 3
+
+        lines.append(((mc_col_start + sub_width, mc_row_start), (mc_col_start + sub_width, mc_row_end), (255, 0, 0), 2))
+        lines.append(((mc_col_start + 2*sub_width, mc_row_start), (mc_col_start + 2*sub_width, mc_row_end), (255, 0, 0), 2))
+
+        return lines
 
 def main(args=None):
     rclpy.init(args=args)
