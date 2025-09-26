@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "midas_node = tello_midas.midas_node:main",
+            "midas_inference = tello_midas.midas_inference:main",
+            "midas_analysis = tello_midas.midas_analysis:main",
             "multi_midas_node = tello_midas.multi_midas_node:main",
         ],
     },
