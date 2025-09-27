@@ -4,6 +4,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy, QoSHistoryPolicy
 from cv_bridge import CvBridge
+from midas_msgs.msg import DepthMapAnalysis, ColorCount
 
 import numpy as np
 import cv2
@@ -17,10 +18,14 @@ class MiDaSAnalysis(Node):
         self.declare_parameter("input_depth_topic", "/tello1/depth/raw")
         self.declare_parameter("output_colormap_topic", "/tello1/depth/colormap")
         self.declare_parameter("output_annotated_colormap_topic", "/tello1/depth/colormap_annotated")
+        self.declare_parameter("output_colormap_analysis_topic", "/tello1/depth/analysis")
 
         input_depth_topic = self.get_parameter("input_depth_topic").value
         output_colormap_topic = self.get_parameter("output_colormap_topic").value
         output_annotated_colormap_topic = self.get_parameter("output_annotated_colormap_topic").value
+        output_colormap_analysis_topic = self.get_parameter("output_colormap_analysis_topic").value
+
+        self.get_logger().info(f"Subscribing {input_depth_topic}, publishing {output_annotated_colormap_topic}, and {output_colormap_analysis_topic}")
 
         self.bridge = CvBridge()
 
@@ -35,13 +40,15 @@ class MiDaSAnalysis(Node):
         self.sub = self.create_subscription(Image, input_depth_topic, self.depth_image_callback, qos_profile)
         self.pub_colormap = self.create_publisher(Image, output_colormap_topic, qos_profile)
         self.pub_annotated_colormap = self.create_publisher(Image, output_annotated_colormap_topic, qos_profile)
+        self.pub_analysis = self.create_publisher(DepthMapAnalysis, output_colormap_analysis_topic, qos_profile)
 
         self.grid_lines = None
 
     def depth_image_callback(self, msg: Image):
         # Skip processing if no subscribers to save computation
         if (self.pub_colormap.get_subscription_count() == 0 and 
-            self.pub_annotated_colormap.get_subscription_count() == 0):
+            self.pub_annotated_colormap.get_subscription_count() == 0 and
+            self.pub_analysis.get_subscription_count() == 0):
             return
         
         try:
@@ -54,7 +61,7 @@ class MiDaSAnalysis(Node):
         except Exception as e:
             self.get_logger().error(f"Error in depth_image_callback: {e}")
 
-    def __process_colormaps(self, depth_map, header):             
+    def __process_colormaps(self, depth_map, header):
         depth_norm = cv2.normalize(depth_map, None, 0, 1, norm_type=cv2.NORM_MINMAX)
         depth_color = cv2.applyColorMap((depth_norm * 255).astype(np.uint8), cv2.COLORMAP_JET)
         height, width = depth_color.shape[:2]
@@ -62,8 +69,8 @@ class MiDaSAnalysis(Node):
         if self.grid_lines is None:
             self.grid_lines = self.__compute_grid_lines(height, width)
 
-        # Analyze and publish colormap data
-        self.__publish_colormap_data(depth_color, header, height, width)
+        # Analyze and publish colormap analysis
+        self.__publish_colormap_analysis(depth_color, header, height, width)
 
         # Publish clean colormap
         self.__publish_clean_colormap(depth_color, header)
@@ -71,30 +78,30 @@ class MiDaSAnalysis(Node):
         # Publish annotated colormap
         self.__publish_annotated_colormap(depth_color, header)
 
-    def __publish_colormap_data(self, depth_colormap, header, h, w):            
+    def __publish_colormap_analysis(self, depth_colormap, header, h, w):
         # Define the 3x3 grid regions
-        top_left     = depth_colormap[:h//3, :w//3]
-        top_center   = depth_colormap[:h//3, w//3:2*w//3]
-        top_right    = depth_colormap[:h//3, 2*w//3:]
+        # top_left     = depth_colormap[:h//3, :w//3]
+        # top_center   = depth_colormap[:h//3, w//3:2*w//3]
+        # top_right    = depth_colormap[:h//3, 2*w//3:]
         
         middle_left  = depth_colormap[h//3:2*h//3, :w//3]
         middle_center= depth_colormap[h//3:2*h//3, w//3:2*w//3]
         middle_right = depth_colormap[h//3:2*h//3, 2*w//3:]
         
-        bottom_left  = depth_colormap[2*h//3:, :w//3]
-        bottom_center= depth_colormap[2*h//3:, w//3:2*w//3]
-        bottom_right = depth_colormap[2*h//3:, 2*w//3:]
+        # bottom_left  = depth_colormap[2*h//3:, :w//3]
+        # bottom_center= depth_colormap[2*h//3:, w//3:2*w//3]
+        # bottom_right = depth_colormap[2*h//3:, 2*w//3:]
         
         # Analyze colors in the middle row regions
-        red_middle_left = np.sum((middle_left[:, :, 2] > 150) & (middle_left[:, :, 0] < 50))
-        blue_middle_left = np.sum((middle_left[:, :, 0] > 150) & (middle_left[:, :, 2] < 50))
-        
-        red_middle_center = np.sum((middle_center[:, :, 2] > 150) & (middle_center[:, :, 0] < 50))
-        blue_middle_center = np.sum((middle_center[:, :, 0] > 150) & (middle_center[:, :, 2] < 50))
-        
-        red_middle_right = np.sum((middle_right[:, :, 2] > 150) & (middle_right[:, :, 0] < 50))
-        blue_middle_right = np.sum((middle_right[:, :, 0] > 150) & (middle_right[:, :, 2] < 50))
-        
+        red_middle_left = int(np.sum((middle_left[:, :, 2] > 150) & (middle_left[:, :, 0] < 50)))
+        blue_middle_left = int(np.sum((middle_left[:, :, 0] > 150) & (middle_left[:, :, 2] < 50)))
+
+        red_middle_center = int(np.sum((middle_center[:, :, 2] > 150) & (middle_center[:, :, 0] < 50)))
+        blue_middle_center = int(np.sum((middle_center[:, :, 0] > 150) & (middle_center[:, :, 2] < 50)))
+
+        red_middle_right = int(np.sum((middle_right[:, :, 2] > 150) & (middle_right[:, :, 0] < 50)))
+        blue_middle_right = int(np.sum((middle_right[:, :, 0] > 150) & (middle_right[:, :, 2] < 50)))
+
         # Further split the middle_center region into 3 columns for detailed analysis
         mc_row_start = h//3
         mc_row_end = 2*h//3
@@ -108,30 +115,32 @@ class MiDaSAnalysis(Node):
         middle_center_right = depth_colormap[mc_row_start:mc_row_end, mc_col_start + 2*sub_width: mc_col_end]
         
         # Analyze colors in the subdivided middle_center subregions
-        red_mc_left = np.sum((middle_center_left[:, :, 2] > 150) & (middle_center_left[:, :, 0] < 50))
-        nonblue_mc_left = np.sum(~((middle_center_left[:, :, 0] > 150) & (middle_center_left[:, :, 2] < 50)))
-        blue_mc_left = np.sum((middle_center_left[:, :, 0] > 150) & (middle_center_left[:, :, 2] < 50))
-        
-        red_mc_center = np.sum((middle_center_center[:, :, 2] > 150) & (middle_center_center[:, :, 0] < 50))
-        nonblue_mc_center = np.sum(~((middle_center_center[:, :, 0] > 150) & (middle_center_center[:, :, 2] < 50)))
-        blue_mc_center = np.sum((middle_center_center[:, :, 0] > 150) & (middle_center_center[:, :, 2] < 50))
-        
-        red_mc_right = np.sum((middle_center_right[:, :, 2] > 150) & (middle_center_right[:, :, 0] < 50))
-        nonblue_mc_right = np.sum(~((middle_center_right[:, :, 0] > 150) & (middle_center_right[:, :, 2] < 50)))
-        blue_mc_right = np.sum((middle_center_right[:, :, 0] > 150) & (middle_center_right[:, :, 2] < 50))
-        
-        # # Update class attributes with both levels of analysis
-        # self.depth_map_colors["middle_row"] = {
-        #     "middle_left": {"red": red_middle_left, "blue": blue_middle_left},
-        #     "middle_center": {"red": red_middle_center, "blue": blue_middle_center},
-        #     "middle_right": {"red": red_middle_right, "blue": blue_middle_right}
-        # }
-        
-        # self.depth_map_colors["middle_center_split"] = {
-        #     "left": {"red": red_mc_left, "blue": blue_mc_left, "nonblue": nonblue_mc_left},
-        #     "center": {"red": red_mc_center, "blue": blue_mc_center, "nonblue": nonblue_mc_center},
-        #     "right": {"red": red_mc_right, "blue": blue_mc_right, "nonblue": nonblue_mc_right}
-        # }
+        red_mc_left = int(np.sum((middle_center_left[:, :, 2] > 150) & (middle_center_left[:, :, 0] < 50)))
+        nonblue_mc_left = int(np.sum(~((middle_center_left[:, :, 0] > 150) & (middle_center_left[:, :, 2] < 50))))
+        blue_mc_left = int(np.sum((middle_center_left[:, :, 0] > 150) & (middle_center_left[:, :, 2] < 50)))
+
+        red_mc_center = int(np.sum((middle_center_center[:, :, 2] > 150) & (middle_center_center[:, :, 0] < 50)))
+        nonblue_mc_center = int(np.sum(~((middle_center_center[:, :, 0] > 150) & (middle_center_center[:, :, 2] < 50))))
+        blue_mc_center = int(np.sum((middle_center_center[:, :, 0] > 150) & (middle_center_center[:, :, 2] < 50)))
+
+        red_mc_right = int(np.sum((middle_center_right[:, :, 2] > 150) & (middle_center_right[:, :, 0] < 50)))
+        nonblue_mc_right = int(np.sum(~((middle_center_right[:, :, 0] > 150) & (middle_center_right[:, :, 2] < 50))))
+        blue_mc_right = int(np.sum((middle_center_right[:, :, 0] > 150) & (middle_center_right[:, :, 2] < 50)))
+
+        msg = DepthMapAnalysis()
+        msg.header = header
+
+        # Middle row
+        msg.middle_left = ColorCount(red=red_middle_left, blue=blue_middle_left)
+        msg.middle_center = ColorCount(red=red_middle_center, blue=blue_middle_center)
+        msg.middle_right = ColorCount(red=red_middle_right, blue=blue_middle_right)
+
+        # Middle-center split
+        msg.mc_left = ColorCount(red=red_mc_left, blue=blue_mc_left, nonblue=nonblue_mc_left)
+        msg.mc_center = ColorCount(red=red_mc_center, blue=blue_mc_center, nonblue=nonblue_mc_center)
+        msg.mc_right = ColorCount(red=red_mc_right, blue=blue_mc_right, nonblue=nonblue_mc_right)
+
+        self.pub_analysis.publish(msg)
 
     def __publish_clean_colormap(self, depth_color, header):
         if self.pub_colormap.get_subscription_count() == 0:
@@ -141,7 +150,7 @@ class MiDaSAnalysis(Node):
         colormap_msg.header = header
         self.pub_colormap.publish(colormap_msg)
 
-    def __publish_annotated_colormap(self, depth_color, header): 
+    def __publish_annotated_colormap(self, depth_color, header):
         if self.pub_annotated_colormap.get_subscription_count() == 0:
             return
 
@@ -152,7 +161,7 @@ class MiDaSAnalysis(Node):
         annotated_msg.header = header
         self.pub_annotated_colormap.publish(annotated_msg)
 
-    def __compute_grid_lines(self, height, width):
+    def __compute_grid_lines(self, height, width) -> list[tuple]:
         """Precompute all grid lines for the annotated colormap."""
         lines = []
         # Outer green 3x3 grid
