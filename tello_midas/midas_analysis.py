@@ -79,66 +79,58 @@ class MiDaSAnalysis(Node):
         self.__publish_annotated_colormap(depth_color, header)
 
     def __publish_colormap_analysis(self, depth_colormap, header, h, w):
-        # Define the 3x3 grid regions
-        # top_left     = depth_colormap[:h//3, :w//3]
-        # top_center   = depth_colormap[:h//3, w//3:2*w//3]
-        # top_right    = depth_colormap[:h//3, 2*w//3:]
-        
-        middle_left  = depth_colormap[h//3:2*h//3, :w//3]
-        middle_center= depth_colormap[h//3:2*h//3, w//3:2*w//3]
-        middle_right = depth_colormap[h//3:2*h//3, 2*w//3:]
-        
-        # bottom_left  = depth_colormap[2*h//3:, :w//3]
-        # bottom_center= depth_colormap[2*h//3:, w//3:2*w//3]
-        # bottom_right = depth_colormap[2*h//3:, 2*w//3:]
-        
-        # Analyze colors in the middle row regions
-        red_middle_left = int(np.sum((middle_left[:, :, 2] > 150) & (middle_left[:, :, 0] < 50)))
-        blue_middle_left = int(np.sum((middle_left[:, :, 0] > 150) & (middle_left[:, :, 2] < 50)))
+        if self.pub_analysis.get_subscription_count() == 0:
+            return
 
-        red_middle_center = int(np.sum((middle_center[:, :, 2] > 150) & (middle_center[:, :, 0] < 50)))
-        blue_middle_center = int(np.sum((middle_center[:, :, 0] > 150) & (middle_center[:, :, 2] < 50)))
+        # Precompute masks
+        red_mask  = ((depth_colormap[:, :, 2] > 150) & (depth_colormap[:, :, 0] < 50)).astype(np.uint8)
+        blue_mask = ((depth_colormap[:, :, 0] > 150) & (depth_colormap[:, :, 2] < 50)).astype(np.uint8)
 
-        red_middle_right = int(np.sum((middle_right[:, :, 2] > 150) & (middle_right[:, :, 0] < 50)))
-        blue_middle_right = int(np.sum((middle_right[:, :, 0] > 150) & (middle_right[:, :, 2] < 50)))
+        # Build integral images using OpenCV (faster than np.cumsum)
+        # cv2.integral returns shape (h+1, w+1), so we will adjust indices
+        red_integral  = cv2.integral(red_mask, sdepth=cv2.CV_32S)
+        blue_integral = cv2.integral(blue_mask, sdepth=cv2.CV_32S)
 
-        # Further split the middle_center region into 3 columns for detailed analysis
-        mc_row_start = h//3
-        mc_row_end = 2*h//3
-        mc_col_start = w//3
-        mc_col_end = 2*w//3
-        mc_width = mc_col_end - mc_col_start  # roughly w//3
-        sub_width = mc_width // 3             # width of each subdivided region
-        
-        middle_center_left = depth_colormap[mc_row_start:mc_row_end, mc_col_start: mc_col_start + sub_width]
-        middle_center_center = depth_colormap[mc_row_start:mc_row_end, mc_col_start + sub_width: mc_col_start + 2*sub_width]
-        middle_center_right = depth_colormap[mc_row_start:mc_row_end, mc_col_start + 2*sub_width: mc_col_end]
-        
-        # Analyze colors in the subdivided middle_center subregions
-        red_mc_left = int(np.sum((middle_center_left[:, :, 2] > 150) & (middle_center_left[:, :, 0] < 50)))
-        nonblue_mc_left = int(np.sum(~((middle_center_left[:, :, 0] > 150) & (middle_center_left[:, :, 2] < 50))))
-        blue_mc_left = int(np.sum((middle_center_left[:, :, 0] > 150) & (middle_center_left[:, :, 2] < 50)))
-
-        red_mc_center = int(np.sum((middle_center_center[:, :, 2] > 150) & (middle_center_center[:, :, 0] < 50)))
-        nonblue_mc_center = int(np.sum(~((middle_center_center[:, :, 0] > 150) & (middle_center_center[:, :, 2] < 50))))
-        blue_mc_center = int(np.sum((middle_center_center[:, :, 0] > 150) & (middle_center_center[:, :, 2] < 50)))
-
-        red_mc_right = int(np.sum((middle_center_right[:, :, 2] > 150) & (middle_center_right[:, :, 0] < 50)))
-        nonblue_mc_right = int(np.sum(~((middle_center_right[:, :, 0] > 150) & (middle_center_right[:, :, 2] < 50))))
-        blue_mc_right = int(np.sum((middle_center_right[:, :, 0] > 150) & (middle_center_right[:, :, 2] < 50)))
+        def region_sum(integral, r1, r2, c1, c2):
+            """Return sum of mask values in rectangle [r1:r2, c1:c2)."""
+            # Adjust for integral image extra row/col
+            r1_i, r2_i = r1, r2
+            c1_i, c2_i = c1, c2
+            total = integral[r2_i, c2_i] - integral[r1_i, c2_i] - integral[r2_i, c1_i] + integral[r1_i, c1_i]
+            return int(total)
 
         msg = DepthMapAnalysis()
         msg.header = header
 
-        # Middle row
-        msg.middle_left = ColorCount(red=red_middle_left, blue=blue_middle_left)
-        msg.middle_center = ColorCount(red=red_middle_center, blue=blue_middle_center)
-        msg.middle_right = ColorCount(red=red_middle_right, blue=blue_middle_right)
+        # Middle row regions (split into thirds)
+        row1, row2 = h//3, 2*h//3
+        col1, col2 = w//3, 2*w//3
 
-        # Middle-center split
-        msg.mc_left = ColorCount(red=red_mc_left, blue=blue_mc_left, nonblue=nonblue_mc_left)
-        msg.mc_center = ColorCount(red=red_mc_center, blue=blue_mc_center, nonblue=nonblue_mc_center)
-        msg.mc_right = ColorCount(red=red_mc_right, blue=blue_mc_right, nonblue=nonblue_mc_right)
+        # left / center / right
+        msg.middle_left   = ColorCount(
+            red  = region_sum(red_integral, row1, row2, 0, col1),
+            blue = region_sum(blue_integral, row1, row2, 0, col1)
+        )
+        msg.middle_center = ColorCount(
+            red  = region_sum(red_integral, row1, row2, col1, col2),
+            blue = region_sum(blue_integral, row1, row2, col1, col2)
+        )
+        msg.middle_right  = ColorCount(
+            red  = region_sum(red_integral, row1, row2, col2, w),
+            blue = region_sum(blue_integral, row1, row2, col2, w)
+        )
+
+        # Further split middle_center into thirds
+        mc_width = col2 - col1
+        sub_w = mc_width // 3
+
+        for i, field in enumerate(["mc_left", "mc_center", "mc_right"]):
+            c1_sub = col1 + i * sub_w
+            c2_sub = col1 + (i + 1) * sub_w if i < 2 else col2
+            red_val  = region_sum(red_integral,  row1, row2, c1_sub, c2_sub)
+            blue_val = region_sum(blue_integral, row1, row2, c1_sub, c2_sub)
+            nonblue_val = (row2 - row1) * (c2_sub - c1_sub) - blue_val
+            setattr(msg, field, ColorCount(red=red_val, blue=blue_val, nonblue=nonblue_val))
 
         self.pub_analysis.publish(msg)
 
