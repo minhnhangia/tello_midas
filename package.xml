@@ -4,7 +4,7 @@
   <name>tello_midas</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="giaminh.nhan@kabam.ai">minh</maintainer>
+  <maintainer email="minhnhangia@gmail.com">minh</maintainer>
   <license>TODO: License declaration</license>
 
   <depend>rclpy</depend>
