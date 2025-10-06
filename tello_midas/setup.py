@@ -22,7 +22,7 @@ setup(
         'console_scripts': [
             "midas_inference = tello_midas.midas_inference:main",
             "midas_analysis = tello_midas.midas_analysis:main",
-            "multi_midas_node = tello_midas.multi_midas_node:main",
+            "multi_midas_inference = tello_midas.multi_midas_inference:main",
         ],
     },
 )

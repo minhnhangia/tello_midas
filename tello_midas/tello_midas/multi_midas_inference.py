@@ -10,9 +10,9 @@ import numpy as np
 import cv2
 import time
 
-class MultiMiDaSNode(Node):
+class MultiMiDaSInference(Node):
     def __init__(self):
-        super().__init__('multi_midas_node')
+        super().__init__('multi_midas_inference')
 
         # Parameters
         self.declare_parameter("model_type", "MiDaS_small")  # default to smaller model for CPU
@@ -42,7 +42,6 @@ class MultiMiDaSNode(Node):
         # Create subscribers + publishers for each drone
         self.subs = {}
         self.pubs_depth = {}
-        self.pubs_colormap = {}
 
         qos_profile = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
@@ -54,7 +53,6 @@ class MultiMiDaSNode(Node):
         for drone in drone_ids:
             img_topic = f"/{drone}/image_raw"
             depth_topic = f"/{drone}/depth/raw"
-            cmap_topic = f"/{drone}/depth/colormap"
 
             self.subs[drone] = self.create_subscription(
                 Image, img_topic,
@@ -62,14 +60,13 @@ class MultiMiDaSNode(Node):
                 qos_profile
             )
             self.pubs_depth[drone] = self.create_publisher(Image, depth_topic, qos_profile)
-            self.pubs_colormap[drone] = self.create_publisher(Image, cmap_topic, qos_profile)
 
             self.get_logger().info(
-                f"Subscribed {img_topic}, publishing {depth_topic}, {cmap_topic}"
+                f"Subscribed {img_topic}, publishing {depth_topic}"
             )
 
     def image_callback(self, msg: Image, drone_id: str):
-        if self.pubs_colormap[drone_id].get_subscription_count() == 0 and self.pubs_depth[drone_id].get_subscription_count() == 0:
+        if self.pubs_depth[drone_id].get_subscription_count() == 0:
             return
 
         try:
@@ -95,19 +92,12 @@ class MultiMiDaSNode(Node):
             depth_msg.header = msg.header
             self.pubs_depth[drone_id].publish(depth_msg)
 
-            # Publish depth colormap
-            depth_norm = cv2.normalize(depth_map, None, 0, 1, norm_type=cv2.NORM_MINMAX)
-            depth_color = cv2.applyColorMap((depth_norm * 255).astype(np.uint8), cv2.COLORMAP_JET)
-            color_msg = self.bridge.cv2_to_imgmsg(depth_color, encoding="bgr8")
-            color_msg.header = msg.header
-            self.pubs_colormap[drone_id].publish(color_msg)
-
         except Exception as e:
             self.get_logger().error(f"[{drone_id}] Error in image_callback: {e}")
 
 def main(args=None):
     rclpy.init(args=args)
-    node = MultiMiDaSNode()
+    node = MultiMiDaSInference()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
