@@ -16,14 +16,16 @@ class MiDaSInference(Node):
 
         # Parameters
         self.declare_parameter("model_type", "MiDaS_small")  # default to smaller model for CPU
-        self.declare_parameter("input_topic", "/tello1/image_raw")
-        self.declare_parameter("output_raw_topic", "/tello1/depth/raw")
+        self.declare_parameter("input_topic", "image_raw")
+        self.declare_parameter("output_raw_topic", "depth/raw")
 
         model_type = self.get_parameter("model_type").value
         input_topic = self.get_parameter("input_topic").value
         output_raw_topic = self.get_parameter("output_raw_topic").value
 
-        self.get_logger().info(f"MiDaS model_type={model_type}, subscribing {input_topic}, publishing {output_raw_topic}")
+        self.get_logger().info(
+            f"MiDaS model_type={model_type}, subscribing '{input_topic}', publishing '{output_raw_topic}'"
+        )
 
         self.bridge = CvBridge()
 

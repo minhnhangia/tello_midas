@@ -15,10 +15,10 @@ class MiDaSAnalysis(Node):
         super().__init__('midas_analysis')
 
         # Parameters
-        self.declare_parameter("input_depth_topic", "/tello1/depth/raw")
-        self.declare_parameter("output_colormap_topic", "/tello1/depth/colormap")
-        self.declare_parameter("output_annotated_colormap_topic", "/tello1/depth/colormap_annotated")
-        self.declare_parameter("output_colormap_analysis_topic", "/tello1/depth/analysis")
+        self.declare_parameter("input_depth_topic", "depth/raw")
+        self.declare_parameter("output_colormap_topic", "depth/colormap")
+        self.declare_parameter("output_annotated_colormap_topic", "depth/colormap_annotated")
+        self.declare_parameter("output_colormap_analysis_topic", "depth/analysis")
 
         input_depth_topic = self.get_parameter("input_depth_topic").value
         output_colormap_topic = self.get_parameter("output_colormap_topic").value
@@ -147,8 +147,9 @@ class MiDaSAnalysis(Node):
             return
 
         annotated = depth_color.copy()
-        for start, end, color, thickness in self.grid_lines:
-            cv2.line(annotated, start, end, color, thickness)
+        if self.grid_lines:
+            for start, end, color, thickness in self.grid_lines:
+                cv2.line(annotated, start, end, color, thickness)
         annotated_msg = self.bridge.cv2_to_imgmsg(annotated, encoding="bgr8")
         annotated_msg.header = header
         self.pub_annotated_colormap.publish(annotated_msg)
