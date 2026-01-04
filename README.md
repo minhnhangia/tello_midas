@@ -11,11 +11,11 @@ This package contains three main nodes:
 
 ## Dependencies
 
-*   **ROS2** (Foxy/Galactic/Humble)
+*   **ROS2** (Jazzy)
 *   **Python 3**
 *   **PyTorch**: `torch`, `torchvision`
 *   **OpenCV**: `opencv-python`
-*   **[midas_msgs](../midas_msgs)**: Custom message definitions for depth analysis.
+*   **[midas_msgs](midas_msgs)**: Custom message definitions for depth analysis.
 
 ## Nodes
 
@@ -23,7 +23,7 @@ This package contains three main nodes:
 
 Performs depth estimation on a single camera stream.
 
-**Source:** [tello_midas/midas_inference.py](tello_midas/midas_inference.py)
+**Source:** [tello_midas/midas_inference.py](tello_midas/tello_midas/midas_inference.py)
 
 #### Parameters
 | Parameter | Type | Default | Description |
@@ -44,7 +44,7 @@ Performs depth estimation on a single camera stream.
 
 Analyzes the raw depth map to determine obstacle proximity. It divides the image into regions (Left, Center, Right) and counts "Red" (close) vs "Blue" (far) pixels.
 
-**Source:** [tello_midas/midas_analysis.py](tello_midas/midas_analysis.py)
+**Source:** [tello_midas/midas_analysis.py](tello_midas/tello_midas/midas_analysis.py)
 
 #### Parameters
 | Parameter | Type | Default | Description |
@@ -56,7 +56,7 @@ Analyzes the raw depth map to determine obstacle proximity. It divides the image
 
 #### Published Topics
 *   `depth/colormap` ([sensor_msgs/Image](http://docs.ros.org/en/api/sensor_msgs/html/msg/Image.html)): BGR8 visualization.
-*   `depth/analysis` ([midas_msgs/DepthMapAnalysis](../midas_msgs/msg/DepthMapAnalysis.msg)): Contains pixel counts for red/blue thresholds in specific image regions.
+*   `depth/analysis` ([midas_msgs/DepthMapAnalysis](midas_msgs/msg/DepthMapAnalysis.msg)): Contains pixel counts for red/blue thresholds in specific image regions.
 
 ---
 
@@ -64,7 +64,7 @@ Analyzes the raw depth map to determine obstacle proximity. It divides the image
 
 Optimized inference node for swarm applications. Loads the PyTorch model into memory *once* and processes images from multiple drones.
 
-**Source:** [tello_midas/multi_midas_inference.py](tello_midas/multi_midas_inference.py)
+**Source:** [tello_midas/multi_midas_inference.py](tello_midas/tello_midas/multi_midas_inference.py)
 
 #### Parameters
 | Parameter | Type | Default | Description |
